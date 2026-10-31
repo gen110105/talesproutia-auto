@@ -73,8 +73,40 @@ or quoted books. Fill every requested field with complete content."""
             f"finish_reason={choice.get('finish_reason')}; model={MODEL}"
         )
     story = json.loads(content)
-    if len(story["narration"].split()) < 600:
-        raise ValueError("Story narration was too short; expected at least 600 words.")
+    word_count = len(story.get("narration", "").split())
+    if word_count < 650:
+        print(f"Story was short ({word_count} words); requesting one expansion.")
+        payload["messages"] = [
+            {"role": "user", "content": prompt},
+            {"role": "assistant", "content": content},
+            {"role": "user", "content": (
+                "Expand and rewrite the narration in the story above. "
+                "The narration MUST contain 700-850 words. "
+                "Keep the same title, characters, plot and gentle ending. "
+                "Do not summarize. Return the complete JSON object with exactly 8 scenes."
+            )}
+        ]
+        r = requests.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={"Authorization": "Bearer " + os.environ["GROQ_API_KEY"],
+                     "Content-Type": "application/json"},
+            json=payload, timeout=180
+        )
+        if not r.ok:
+            raise RuntimeError(f"Groq expansion error {r.status_code}: {r.text[:2000]} (model={MODEL})")
+        data = r.json()
+        choice = (data.get("choices") or [{}])[0]
+        message = choice.get("message") or {}
+        expanded = message.get("content")
+        if not isinstance(expanded, str) or not expanded.strip():
+            raise RuntimeError(
+                "Groq returned an empty expanded story. "
+                f"finish_reason={choice.get('finish_reason')}; model={MODEL}"
+            )
+        story = json.loads(expanded)
+        word_count = len(story.get("narration", "").split())
+    if word_count < 600:
+        raise ValueError(f"Story narration was too short after expansion ({word_count} words); expected at least 600.")
     if len(story["scenes"]) != 8:
         raise ValueError("Story must contain exactly 8 scenes.")
     return story
