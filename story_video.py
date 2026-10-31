@@ -30,7 +30,7 @@ or quoted books. Fill every requested field with complete content."""
             "scenes": {
                 "type": "array",
                 "items": {"type": "string"},
-                "minItems": 8,
+                "minItems": 1,
                 "maxItems": 8
             }
         },
@@ -110,8 +110,22 @@ or quoted books. Fill every requested field with complete content."""
             f"Warning: story narration is shorter than the 5-8 minute target "
             f"({word_count} words). Continuing to render the video instead of failing."
         )
-    if len(story["scenes"]) != 8:
-        raise ValueError("Story must contain exactly 8 scenes.")
+    # The model may return fewer than 8 scene descriptions. Build 8
+    # deterministic scene cards from the narration so the video can proceed.
+    scenes = list(story.get("scenes") or [])
+    paragraphs = [p.strip() for p in story["narration"].splitlines() if p.strip()]
+    while len(scenes) < 8:
+        index = len(scenes)
+        if paragraphs:
+            paragraph_index = min(
+                len(paragraphs) - 1,
+                round(index * (len(paragraphs) - 1) / 7)
+            )
+            scenes.append(paragraphs[paragraph_index][:220])
+        else:
+            scenes.append(f"Story moment {index + 1}: {story['title']}")
+    story["scenes"] = scenes[:8]
+    print(f"Prepared {len(story['scenes'])} visual scenes.")
     return story
 
 def get_font(size, bold=False):
