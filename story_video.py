@@ -15,25 +15,61 @@ VOICE = os.getenv("TTS_VOICE", "en-US-AvaNeural")
 
 
 def make_story():
-    prompt = """Write an original, gentle English story for children ages 4-8.
-Return ONLY JSON with keys title, description, narration, scenes.
-Narration: 700-850 words, simple spoken English, clear beginning/middle/ending,
-kindness or curiosity, satisfying conclusion. No violence, frightening peril,
-copyrighted characters, franchises, songs, or quoted books.
-scenes: exactly 8 short visual descriptions matching the story."""
-    r = requests.post("https://api.groq.com/openai/v1/chat/completions",
+    prompt = """Create an original, gentle English story for children ages 4-8.
+Return one valid JSON object only, with exactly these keys:
+"title", "description", "narration", "scenes".
+"narration" must be 700-850 words in simple spoken English, with a clear
+beginning, middle and satisfying ending. Include kindness or curiosity.
+"scenes" must be an array of exactly 8 short visual descriptions in story order.
+No violence, frightening peril, copyrighted characters, franchises, songs,
+or quoted books. Do not use Markdown fences or any text outside the JSON."""
+    payload = {
+        "model": MODEL,
+        "temperature": 0.7,
+        "max_completion_tokens": 5000,
+        "reasoning_effort": "low",
+        "reasoning_format": "hidden",
+        "response_format": {"type": "json_object"},
+        "messages": [
+            {"role": "system", "content": "You write safe, original children's stories. Output valid JSON only."},
+            {"role": "user", "content": prompt}
+        ]
+    }
+    r = requests.post(
+        "https://api.groq.com/openai/v1/chat/completions",
         headers={"Authorization": "Bearer " + os.environ["GROQ_API_KEY"],
                  "Content-Type": "application/json"},
-        json={"model": MODEL, "temperature": 0.8, "max_tokens": 2600,
-              "messages": [{"role": "system", "content": "Write safe, original children's stories."},
-                           {"role": "user", "content": prompt}]}, timeout=120)
+        json=payload, timeout=180
+    )
     if not r.ok:
-        raise RuntimeError(f"Groq API error {r.status_code}: {r.text[:1200]} (model={MODEL})")
-    story = json.loads(r.json()["choices"][0]["message"]["content"])
-    if len(story.get("narration", "").split()) < 600 or len(story.get("scenes", [])) != 8:
-        raise ValueError("Story did not meet the required length or scene count.")
+        raise RuntimeError(f"Groq API error {r.status_code}: {r.text[:1600]} (model={MODEL})")
+    data = r.json()
+    choice = (data.get("choices") or [{}])[0]
+    message = choice.get("message") or {}
+    content = message.get("content")
+    if not isinstance(content, str) or not content.strip():
+        raise RuntimeError(
+            "Groq returned an empty story. "
+            f"finish_reason={choice.get('finish_reason')}; "
+            f"message_fields={list(message.keys())}; "
+            f"model={MODEL}. Check Groq model access and completion settings."
+        )
+    try:
+        story = json.loads(content)
+    except json.JSONDecodeError as exc:
+        preview = content[:500].replace("\\n", " ")
+        raise RuntimeError(
+            f"Groq returned invalid JSON at line {exc.lineno}, column {exc.colno}. "
+            f"Response starts: {preview!r}"
+        ) from exc
+    required = {"title", "description", "narration", "scenes"}
+    if not isinstance(story, dict) or not required.issubset(story):
+        raise ValueError("Story JSON is missing required fields.")
+    if not isinstance(story["narration"], str) or len(story["narration"].split()) < 600:
+        raise ValueError("Story narration was too short; expected at least 600 words.")
+    if not isinstance(story["scenes"], list) or len(story["scenes"]) != 8:
+        raise ValueError("Story must contain exactly 8 scenes.")
     return story
-
 
 def get_font(size, bold=False):
     path = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
