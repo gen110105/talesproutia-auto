@@ -30,16 +30,16 @@ jobs:
           pip install -r requirements.txt
       - name: Generate story video
         env:
-          GROQ_API_KEY: \${{ secrets.GROQ_API_KEY }}
-          YOUTUBE_CLIENT_ID: \${{ secrets.YOUTUBE_CLIENT_ID }}
-          YOUTUBE_CLIENT_SECRET: \${{ secrets.YOUTUBE_CLIENT_SECRET }}
-          YOUTUBE_REFRESH_TOKEN: \${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
           YOUTUBE_PRIVACY_STATUS: private
         run: python story_video.py
       - name: Save generated video
         uses: actions/upload-artifact@v4
         with:
-          name: talesproutia-video-\${{ github.run_number }}
+          name: talesproutia-video-${{ github.run_number }}
           path: output/
           retention-days: 7
           if-no-files-found: error
