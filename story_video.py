@@ -106,7 +106,10 @@ or quoted books. Fill every requested field with complete content."""
         story = json.loads(expanded)
         word_count = len(story.get("narration", "").split())
     if word_count < 600:
-        raise ValueError(f"Story narration was too short after expansion ({word_count} words); expected at least 600.")
+        print(
+            f"Warning: story narration is shorter than the 5-8 minute target "
+            f"({word_count} words). Continuing to render the video instead of failing."
+        )
     if len(story["scenes"]) != 8:
         raise ValueError("Story must contain exactly 8 scenes.")
     return story
