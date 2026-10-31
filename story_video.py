@@ -15,23 +15,43 @@ VOICE = os.getenv("TTS_VOICE", "en-US-AvaNeural")
 
 
 def make_story():
-    prompt = """Create an original, gentle English story for children ages 4-8.
-Return one valid JSON object only, with exactly these keys:
-"title", "description", "narration", "scenes".
-"narration" must be 700-850 words in simple spoken English, with a clear
+    prompt = """Write an original, gentle English story for children ages 4-8.
+The narration must be 700-850 words in simple spoken English, with a clear
 beginning, middle and satisfying ending. Include kindness or curiosity.
-"scenes" must be an array of exactly 8 short visual descriptions in story order.
+Create exactly 8 short visual scene descriptions in story order.
 No violence, frightening peril, copyrighted characters, franchises, songs,
-or quoted books. Do not use Markdown fences or any text outside the JSON."""
+or quoted books. Fill every requested field with complete content."""
+    schema = {
+        "type": "object",
+        "properties": {
+            "title": {"type": "string"},
+            "description": {"type": "string"},
+            "narration": {"type": "string"},
+            "scenes": {
+                "type": "array",
+                "items": {"type": "string"},
+                "minItems": 8,
+                "maxItems": 8
+            }
+        },
+        "required": ["title", "description", "narration", "scenes"],
+        "additionalProperties": False
+    }
     payload = {
         "model": MODEL,
-        "temperature": 0.7,
-        "max_completion_tokens": 5000,
+        "temperature": 0.6,
+        "max_completion_tokens": 6000,
         "reasoning_effort": "low",
         "reasoning_format": "hidden",
-        "response_format": {"type": "json_object"},
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "childrens_story",
+                "strict": True,
+                "schema": schema
+            }
+        },
         "messages": [
-            {"role": "system", "content": "You write safe, original children's stories. Output valid JSON only."},
             {"role": "user", "content": prompt}
         ]
     }
@@ -42,7 +62,7 @@ or quoted books. Do not use Markdown fences or any text outside the JSON."""
         json=payload, timeout=180
     )
     if not r.ok:
-        raise RuntimeError(f"Groq API error {r.status_code}: {r.text[:1600]} (model={MODEL})")
+        raise RuntimeError(f"Groq API error {r.status_code}: {r.text[:2000]} (model={MODEL})")
     data = r.json()
     choice = (data.get("choices") or [{}])[0]
     message = choice.get("message") or {}
@@ -50,24 +70,12 @@ or quoted books. Do not use Markdown fences or any text outside the JSON."""
     if not isinstance(content, str) or not content.strip():
         raise RuntimeError(
             "Groq returned an empty story. "
-            f"finish_reason={choice.get('finish_reason')}; "
-            f"message_fields={list(message.keys())}; "
-            f"model={MODEL}. Check Groq model access and completion settings."
+            f"finish_reason={choice.get('finish_reason')}; model={MODEL}"
         )
-    try:
-        story = json.loads(content)
-    except json.JSONDecodeError as exc:
-        preview = content[:500].replace("\\n", " ")
-        raise RuntimeError(
-            f"Groq returned invalid JSON at line {exc.lineno}, column {exc.colno}. "
-            f"Response starts: {preview!r}"
-        ) from exc
-    required = {"title", "description", "narration", "scenes"}
-    if not isinstance(story, dict) or not required.issubset(story):
-        raise ValueError("Story JSON is missing required fields.")
-    if not isinstance(story["narration"], str) or len(story["narration"].split()) < 600:
+    story = json.loads(content)
+    if len(story["narration"].split()) < 600:
         raise ValueError("Story narration was too short; expected at least 600 words.")
-    if not isinstance(story["scenes"], list) or len(story["scenes"]) != 8:
+    if len(story["scenes"]) != 8:
         raise ValueError("Story must contain exactly 8 scenes.")
     return story
 
