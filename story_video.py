@@ -25,7 +25,6 @@ scenes: exactly 8 short visual descriptions matching the story."""
         headers={"Authorization": "Bearer " + os.environ["GROQ_API_KEY"],
                  "Content-Type": "application/json"},
         json={"model": MODEL, "temperature": 0.8, "max_tokens": 2600,
-              "response_format": {"type": "json_object"},
               "messages": [{"role": "system", "content": "Write safe, original children's stories."},
                            {"role": "user", "content": prompt}]}, timeout=120)
     if not r.ok:
