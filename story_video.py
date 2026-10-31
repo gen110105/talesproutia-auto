@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parent
 OUT = ROOT / "output"
 OUT.mkdir(exist_ok=True)
 W, H = 1280, 720
-MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
 VOICE = os.getenv("TTS_VOICE", "en-US-AvaNeural")
 
 
@@ -28,7 +28,8 @@ scenes: exactly 8 short visual descriptions matching the story."""
               "response_format": {"type": "json_object"},
               "messages": [{"role": "system", "content": "Write safe, original children's stories."},
                            {"role": "user", "content": prompt}]}, timeout=120)
-    r.raise_for_status()
+    if not r.ok:
+        raise RuntimeError(f"Groq API error {r.status_code}: {r.text[:1200]} (model={MODEL})")
     story = json.loads(r.json()["choices"][0]["message"]["content"])
     if len(story.get("narration", "").split()) < 600 or len(story.get("scenes", [])) != 8:
         raise ValueError("Story did not meet the required length or scene count.")
